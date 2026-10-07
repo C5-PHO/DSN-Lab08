@@ -186,6 +186,28 @@ class TechStoreTests(unittest.TestCase):
         self.assertEqual(self.client.get('/oauth/github/start').status_code, 404)
         self.assertEqual(self.client.get('/api/products').status_code, 401)
 
+    def test_google_replacement_button_starts_account_selection(self):
+        from urllib.parse import parse_qs, urlparse
+        os.environ['GOOGLE_CLIENT_ID'] = 'fake-client-for-tests'
+        os.environ['GOOGLE_CLIENT_SECRET'] = 'fake-secret-for-tests'
+        self.app = create_app(dict(self.app.config))
+        _, email, secret = self.add_user('admin')
+        client, csrf, _ = self.login(email, secret)
+        metadata = {'authorization_endpoint': 'https://accounts.google.com/o/oauth2/v2/auth'}
+        with patch('authlib.integrations.flask_client.apps.FlaskOAuth2App.load_server_metadata', return_value=metadata):
+            response = client.post('/oauth/google/replace', data={'_csrf': csrf})
+        self.assertEqual(response.status_code, 302)
+        destination = urlparse(response.location)
+        self.assertEqual(destination.netloc, 'accounts.google.com')
+        query = parse_qs(destination.query)
+        self.assertEqual(query['prompt'], ['select_account'])
+        with client.session_transaction() as session:
+            self.assertEqual(session[f"oauth_mode_{query['state'][0]}"], 'replace')
+        # Chrome checks form-action against redirects too, not only the POST URL.
+        policy = client.get('/dashboard').headers['Content-Security-Policy']
+        self.assertIn("form-action 'self' https://accounts.google.com;", policy)
+        self.assertIn("frame-ancestors 'none'", policy)
+
     def test_google_relink_requires_explicit_replacement_and_displays_email(self):
         os.environ['GOOGLE_CLIENT_ID'] = 'fake-client-for-tests'
         os.environ['GOOGLE_CLIENT_SECRET'] = 'fake-secret-for-tests'

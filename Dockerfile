@@ -20,4 +20,4 @@ COPY tests ./tests
 
 USER app
 EXPOSE 8088
-CMD ["gunicorn", "--bind", "0.0.0.0:8088", "--workers", "1", "--worker-tmp-dir", "/tmp", "app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8088", "--workers", "1", "--threads", "4", "--worker-tmp-dir", "/tmp", "app:create_app()"]

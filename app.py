@@ -136,7 +136,7 @@ def create_app(test_config=None):
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; img-src 'self' data:; style-src 'self'; "
-            "form-action 'self'; frame-ancestors 'none'"
+            "form-action 'self' https://accounts.google.com; frame-ancestors 'none'"
         )
         response.headers['Cache-Control'] = 'no-store'
         return response
