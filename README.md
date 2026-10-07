@@ -2,6 +2,9 @@
 
 Aplicación local de inventario con control de acceso por rol y tienda, registro, bloqueo de intentos, JWT emitido después de MFA TOTP y acceso con Google/GitHub mediante vinculación de cuentas. Corresponde al caso TechStore del enunciado. No despliega recursos en AWS ni genera cargos de nube.
 
+Las [capturas del laboratorio y su alcance](docs/evidencias/README.md) documentan registro,
+MFA, roles y bloqueos con cuentas de demostración, sin publicar secretos.
+
 ## Requisitos
 
 - Docker Desktop para el entorno principal; Python 3.11 o superior para la alternativa local.
