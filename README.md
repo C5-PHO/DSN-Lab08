@@ -4,11 +4,31 @@ Aplicación local de inventario con control de acceso por rol y tienda, registro
 
 ## Requisitos
 
-- Python 3.11 o superior.
+- Docker Desktop para el entorno principal; Python 3.11 o superior para la alternativa local.
 - Una aplicación TOTP como Google Authenticator para iniciar sesión.
 - Para probar Google y GitHub, credenciales OAuth creadas por el dueño de las cuentas. No se incluyen en Git.
 
-## Inicio local
+## Inicio con Docker
+
+En este equipo ya existen `.env` e `instance/`. Docker usa la misma base local y las mismas claves. Para una instalación nueva, genera primero la configuración con los tres primeros comandos de la sección de Python y `scripts/setup_local.py`.
+
+```bash
+docker compose up -d --build --wait
+docker compose exec app python -m flask --app app:create_app bootstrap-admin
+```
+
+El segundo comando solo se usa si todavía no existe un administrador. Abre `http://127.0.0.1:8088/login`. La imagen usa Gunicorn y el contenedor escucha únicamente a través del puerto local publicado. El archivo `.env` se monta como solo lectura y queda fuera de la imagen. `instance/` conserva la base al detener o recrear el contenedor.
+
+```bash
+docker compose ps
+docker compose exec app python -m unittest discover -s tests -v
+docker compose stop
+docker compose start
+```
+
+Después de cambiar las credenciales OAuth en `.env`, ejecuta `docker compose restart app`. Para actualizar el código, ejecuta de nuevo `docker compose up -d --build --wait`. En otro equipo, ajusta `LOCAL_UID` y `LOCAL_GID` en `.env` a los resultados de `id -u` e `id -g`, para que el contenedor pueda leer las claves y escribir en la base local.
+
+## Alternativa con Python
 
 ```bash
 python3 -m venv .venv

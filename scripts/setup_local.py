@@ -20,6 +20,8 @@ content = '\n'.join([
     'BASE_URL=http://127.0.0.1:8088',
     'DATABASE=instance/techstore.sqlite3',
     'COOKIE_SECURE=false',
+    f'LOCAL_UID={os.getuid()}',
+    f'LOCAL_GID={os.getgid()}',
     'GOOGLE_CLIENT_ID=',
     'GOOGLE_CLIENT_SECRET=',
     'GITHUB_CLIENT_ID=',
@@ -30,3 +32,4 @@ fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 with os.fdopen(fd, 'w') as stream:
     stream.write(content)
 print('Created ignored .env with private permissions. OAuth fields remain empty.')
+(root / 'instance').mkdir(exist_ok=True)
