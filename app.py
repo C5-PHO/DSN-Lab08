@@ -138,7 +138,7 @@ def create_app(test_config=None):
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; img-src 'self' data:; style-src 'self'; "
-            "form-action 'self' https://accounts.google.com; frame-ancestors 'none'"
+            "form-action 'self' https://accounts.google.com https://github.com; frame-ancestors 'none'"
         )
         response.headers['Cache-Control'] = 'no-store'
         return response
@@ -637,7 +637,8 @@ def create_app(test_config=None):
             previous = db().execute('SELECT provider_subject FROM oauth_links WHERE user_id=? AND provider=?',
                                     (user['id'], provider)).fetchone()
             if mode == 'link' and previous and previous['provider_subject'] != subject:
-                flash('Ya tienes otra cuenta vinculada. Usa Cambiar cuenta Google para reemplazarla.', 'error')
+                label = 'GitHub' if provider == 'github' else 'Google'
+                flash(f'Ya tienes otra cuenta vinculada. Usa Cambiar cuenta {label} para reemplazarla.', 'error')
                 return redirect(url_for('dashboard'))
             try:
                 db().execute('INSERT INTO oauth_links (user_id,provider,provider_subject,provider_email,provider_username) VALUES (?,?,?,?,?) '
@@ -662,13 +663,13 @@ def create_app(test_config=None):
             db().commit()
         return begin_mfa(user)
 
-    @app.post('/oauth/google/replace')
-    def replace_google():
+    @app.post('/oauth/<provider>/replace')
+    def replace_provider(provider):
         html_user()
-        if 'google' not in providers:
+        if provider not in providers:
             abort(404)
-        callback = app.config['BASE_URL'] + url_for('oauth_callback', provider='google')
-        response = providers['google'].authorize_redirect(callback, prompt='select_account')
+        callback = app.config['BASE_URL'] + url_for('oauth_callback', provider=provider)
+        response = providers[provider].authorize_redirect(callback, prompt='select_account')
         state = parse_qs(urlparse(response.location).query).get('state', [None])[0]
         if not state:
             abort(500)

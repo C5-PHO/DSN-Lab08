@@ -56,13 +56,12 @@
       {% else %}
       <p>Google vinculado: <strong>{{ links[provider].provider_email or 'Correo no registrado en la vinculación anterior' }}</strong></p>
       {% endif %}
-      {% if provider == 'google' %}
-        <form method="post" action="{{ url_for('replace_google') }}">
+        {% set label = 'GitHub' if provider == 'github' else 'Google' %}
+        <form method="post" action="{{ url_for('replace_provider', provider=provider) }}">
           <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-          <p class="muted">La cuenta que elijas reemplazará el acceso con Google actual de tu usuario de TechStore.</p>
-          <button type="submit" class="social-button">{{ provider_icon('google') }}Cambiar cuenta Google</button>
+          <p class="muted">La cuenta que elijas reemplazará el acceso con {{ label }} actual de tu usuario de TechStore.</p>
+          <button type="submit" class="social-button">{{ provider_icon(provider) }}Cambiar cuenta {{ label }}</button>
         </form>
-      {% endif %}
     {% else %}
       <a class="button ghost social-button" href="{{ url_for('oauth_link', provider=provider) }}">{{ provider_icon(provider) }}Vincular {{ 'GitHub' if provider == 'github' else 'Google' }}</a>
     {% endif %}

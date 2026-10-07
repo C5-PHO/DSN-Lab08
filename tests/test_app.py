@@ -209,6 +209,37 @@ class TechStoreTests(unittest.TestCase):
             self.assertEqual(self.sql('SELECT provider_username FROM oauth_links')[0][0], 'andy-test')
             self.assertEqual(anonymous.get('/api/token').status_code, 401)
 
+    def test_github_replacement_selects_account_and_protects_other_users(self):
+        from urllib.parse import parse_qs, urlparse
+        from unittest.mock import Mock
+        os.environ.update(GITHUB_CLIENT_ID='test-github', GITHUB_CLIENT_SECRET='test-secret')
+        self.app = create_app(dict(self.app.config))
+        user_id, email, secret = self.add_user('admin')
+        other_id, _, _ = self.add_user('sales')
+        self.sql('INSERT INTO oauth_links(user_id,provider,provider_subject) VALUES (?, ?, ?)',
+                 (user_id, 'github', '123'))
+        self.sql('INSERT INTO oauth_links(user_id,provider,provider_subject) VALUES (?, ?, ?)',
+                 (other_id, 'github', '456'))
+        client, csrf, _ = self.login(email, secret)
+        self.assertIn(b'Cambiar cuenta GitHub', client.get('/dashboard').data)
+        self.assertEqual(client.post('/oauth/github/replace').status_code, 400)
+        response = client.post('/oauth/github/replace', data={'_csrf': csrf})
+        self.assertEqual(response.status_code, 302)
+        target = urlparse(response.location)
+        self.assertEqual(target.netloc, 'github.com')
+        self.assertEqual(parse_qs(target.query)['prompt'], ['select_account'])
+        profile = Mock()
+        with patch('authlib.integrations.flask_client.apps.FlaskOAuth2App.authorize_access_token', return_value={}), \
+             patch('authlib.integrations.flask_client.apps.FlaskOAuth2App.get', return_value=profile):
+            for subject, expected in [(456, 409), (789, 302)]:
+                with client.session_transaction() as session:
+                    session['oauth_mode_replacement'] = 'replace'
+                profile.json.return_value = {'id': subject, 'login': 'new-account'}
+                self.assertEqual(client.get('/oauth/github/callback?state=replacement').status_code, expected)
+        link = self.sql('SELECT provider_subject,provider_username FROM oauth_links WHERE user_id=?', (user_id,))[0]
+        self.assertEqual(tuple(link), ('789', 'new-account'))
+        self.assertIn(b'@new-account', client.get('/dashboard').data)
+
     def test_social_buttons_render_local_accessible_provider_icons(self):
         os.environ.update(GOOGLE_CLIENT_ID='test-google', GOOGLE_CLIENT_SECRET='test-secret',
                           GITHUB_CLIENT_ID='test-github', GITHUB_CLIENT_SECRET='test-secret')
@@ -248,7 +279,7 @@ class TechStoreTests(unittest.TestCase):
             self.assertEqual(session[f"oauth_mode_{query['state'][0]}"], 'replace')
         # Chrome checks form-action against redirects too, not only the POST URL.
         policy = client.get('/dashboard').headers['Content-Security-Policy']
-        self.assertIn("form-action 'self' https://accounts.google.com;", policy)
+        self.assertIn("form-action 'self' https://accounts.google.com https://github.com;", policy)
         self.assertIn("frame-ancestors 'none'", policy)
 
     def test_google_relink_requires_explicit_replacement_and_displays_email(self):
