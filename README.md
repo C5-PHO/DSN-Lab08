@@ -67,6 +67,15 @@ El acceso social es opcional hasta que se configuren las aplicaciones OAuth. **N
 - Google OAuth Client de tipo web: callback autorizado `http://127.0.0.1:8088/oauth/google/callback`. Completa `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
 - GitHub OAuth App: callback `http://127.0.0.1:8088/oauth/github/callback`. Completa `GITHUB_CLIENT_ID` y `GITHUB_CLIENT_SECRET`.
 
+Para importar el JSON de Google sin copiar el secreto al chat o a la terminal:
+
+```bash
+.venv/bin/python scripts/import_google_oauth.py /ruta/al/client_secret.json
+docker compose restart app
+```
+
+El importador comprueba el callback y actualiza únicamente los campos de Google en `.env`. Conserva el archivo JSON descargado fuera del repositorio. Si Google mantiene la app en modo de prueba, añade el Gmail que usarás en Google Auth Platform → Público → Usuarios de prueba.
+
 Reinicia la aplicación después de editar `.env`. Primero entra con contraseña y MFA y usa **Vincular Google/GitHub**. Después podrás iniciar sesión con la cuenta vinculada; también se te pedirá TOTP. Una identidad social no vinculada no puede asumir una cuenta por coincidencia de correo.
 
 ## API y pruebas
