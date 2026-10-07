@@ -80,6 +80,9 @@ def create_app(test_config=None):
 
     with app.app_context():
         db().executescript((Path(__file__).parent / 'schema.sql').read_text())
+        columns = {row['name'] for row in db().execute('PRAGMA table_info(oauth_links)')}
+        if 'provider_email' not in columns:
+            db().execute('ALTER TABLE oauth_links ADD COLUMN provider_email TEXT')
         db().commit()
 
     oauth = OAuth(app)
@@ -369,8 +372,10 @@ def create_app(test_config=None):
                                        (user['store_id'],)).fetchone()
             else:
                 summary = db().execute('SELECT COUNT(*) AS items, COALESCE(SUM(stock),0) AS units FROM products').fetchone()
+        links = {row['provider']: dict(row) for row in db().execute(
+            'SELECT provider, provider_email FROM oauth_links WHERE user_id=?', (user['id'],))}
         return render_template('dashboard.html', user=user, products=products, stores=stores(),
-                               can=can, summary=summary, providers=providers)
+                               can=can, summary=summary, providers=providers, links=links)
 
     @app.post('/products')
     def create_product_form():
@@ -602,34 +607,43 @@ def create_app(test_config=None):
             abort(404)
         state = request.args.get('state', '')
         mode = session.pop(f'oauth_mode_{state}', None) if state else None
-        if mode not in ('login', 'link'):
+        if mode not in ('login', 'link', 'replace'):
             abort(400)
         try:
             token = providers[provider].authorize_access_token()
             if provider == 'google':
                 info = token.get('userinfo') or providers[provider].parse_id_token(token)
                 subject = str(info['sub'])
+                provider_email = info.get('email') if info.get('email_verified') is True else None
             else:
                 response = providers[provider].get('user', token=token)
                 response.raise_for_status()
                 subject = str(response.json()['id'])
+                provider_email = None
         except Exception:
             app.logger.exception('OAuth callback failed for %s', provider)
             abort(400, 'OAuth verification failed')
         existing = db().execute('SELECT user_id FROM oauth_links WHERE provider=? AND provider_subject=?',
                                 (provider, subject)).fetchone()
-        if mode == 'link':
+        if mode in ('link', 'replace'):
             user = html_user()
             if existing and existing['user_id'] != user['id']:
                 abort(409, 'Identity linked to another account')
+            previous = db().execute('SELECT provider_subject FROM oauth_links WHERE user_id=? AND provider=?',
+                                    (user['id'], provider)).fetchone()
+            if mode == 'link' and previous and previous['provider_subject'] != subject:
+                flash('Ya tienes otra cuenta vinculada. Usa Cambiar cuenta Google para reemplazarla.', 'error')
+                return redirect(url_for('dashboard'))
             try:
-                db().execute('INSERT OR IGNORE INTO oauth_links (user_id,provider,provider_subject) VALUES (?,?,?)',
-                             (user['id'], provider, subject))
+                db().execute('INSERT INTO oauth_links (user_id,provider,provider_subject,provider_email) VALUES (?,?,?,?) '
+                             'ON CONFLICT(user_id,provider) DO UPDATE SET provider_subject=excluded.provider_subject, '
+                             'provider_email=excluded.provider_email',
+                             (user['id'], provider, subject, provider_email))
                 db().commit()
             except sqlite3.IntegrityError:
                 db().rollback()
                 abort(409, 'Account already linked to a different identity')
-            flash(f'Cuenta {provider} vinculada.', 'success')
+            flash(f'Cuenta {provider} vinculada' + (f': {provider_email}.' if provider_email else '.'), 'success')
             return redirect(url_for('dashboard'))
         if not existing:
             flash('Primero inicia sesión con contraseña y MFA; luego vincula esta cuenta social.', 'error')
@@ -638,6 +652,19 @@ def create_app(test_config=None):
         if not user or user['locked_until'] > int(time.time()):
             abort(401)
         return begin_mfa(user)
+
+    @app.post('/oauth/google/replace')
+    def replace_google():
+        html_user()
+        if 'google' not in providers:
+            abort(404)
+        callback = app.config['BASE_URL'] + url_for('oauth_callback', provider='google')
+        response = providers['google'].authorize_redirect(callback, prompt='select_account')
+        state = parse_qs(urlparse(response.location).query).get('state', [None])[0]
+        if not state:
+            abort(500)
+        session[f'oauth_mode_{state}'] = 'replace'
+        return response
 
     @app.cli.command('bootstrap-admin')
     @click.option('--email', prompt=True)

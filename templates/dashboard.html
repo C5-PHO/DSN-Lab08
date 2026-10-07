@@ -48,7 +48,20 @@
 </section>
 <section class="panel"><h2>Acceso social y API</h2>
   <p>Vincula cada proveedor únicamente después de entrar con contraseña y MFA. El acceso social también exigirá TOTP.</p>
-  {% for provider in providers %}<a class="button ghost" href="{{ url_for('oauth_link', provider=provider) }}">Vincular {{ provider|capitalize }}</a>{% endfor %}
+  {% for provider in providers %}
+    {% if provider in links %}
+      <p>{{ provider|capitalize }} vinculado: <strong>{{ links[provider].provider_email or 'Correo no registrado en la vinculación anterior' }}</strong></p>
+      {% if provider == 'google' %}
+        <form method="post" action="{{ url_for('replace_google') }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+          <p class="muted">La cuenta que elijas reemplazará el acceso con Google actual de tu usuario de TechStore.</p>
+          <button type="submit">Cambiar cuenta Google</button>
+        </form>
+      {% endif %}
+    {% else %}
+      <a class="button ghost" href="{{ url_for('oauth_link', provider=provider) }}">Vincular {{ provider|capitalize }}</a>
+    {% endif %}
+  {% endfor %}
   {% if not providers %}<p class="muted">Google y GitHub esperan sus credenciales OAuth locales.</p>{% endif %}
   <p class="muted">Para pruebas de API, <code>/api/token</code> entrega un JWT temporal solo a una sesión autenticada.</p>
 </section>

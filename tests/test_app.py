@@ -1,5 +1,7 @@
 import tempfile
+import os
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import pyotp
@@ -14,6 +16,11 @@ PASSWORD = 'StrongPass1!'
 
 class TechStoreTests(unittest.TestCase):
     def setUp(self):
+        self.oauth_environment = patch.dict(os.environ, {
+            'GOOGLE_CLIENT_ID': '', 'GOOGLE_CLIENT_SECRET': '',
+            'GITHUB_CLIENT_ID': '', 'GITHUB_CLIENT_SECRET': '',
+        })
+        self.oauth_environment.start()
         self.temp = tempfile.TemporaryDirectory()
         self.key = Fernet.generate_key().decode()
         self.app = create_app({
@@ -27,6 +34,7 @@ class TechStoreTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+        self.oauth_environment.stop()
 
     def sql(self, statement, values=()):
         with self.app.app_context():
@@ -177,6 +185,44 @@ class TechStoreTests(unittest.TestCase):
         self.assertEqual(self.client.get('/oauth/google/start').status_code, 404)
         self.assertEqual(self.client.get('/oauth/github/start').status_code, 404)
         self.assertEqual(self.client.get('/api/products').status_code, 401)
+
+    def test_google_relink_requires_explicit_replacement_and_displays_email(self):
+        os.environ['GOOGLE_CLIENT_ID'] = 'fake-client-for-tests'
+        os.environ['GOOGLE_CLIENT_SECRET'] = 'fake-secret-for-tests'
+        self.app = create_app(dict(self.app.config))
+        user_id, email, secret = self.add_user('admin')
+        self.sql('INSERT INTO oauth_links(user_id,provider,provider_subject) VALUES (?, ?, ?)',
+                 (user_id, 'google', 'old-google-identity'))
+        client, _, _ = self.login(email, secret)
+        identity = {'userinfo': {'sub': 'new-google-identity', 'email': 'andy@example.test', 'email_verified': True}}
+        with patch('authlib.integrations.flask_client.apps.FlaskOAuth2App.authorize_access_token', return_value=identity):
+            with client.session_transaction() as state:
+                state['oauth_mode_fake-state'] = 'link'
+            self.assertEqual(client.get('/oauth/google/callback?state=fake-state').status_code, 302)
+            self.assertEqual(self.sql('SELECT provider_subject FROM oauth_links')[0][0], 'old-google-identity')
+            with client.session_transaction() as state:
+                state['oauth_mode_fake-state'] = 'replace'
+            self.assertEqual(client.get('/oauth/google/callback?state=fake-state').status_code, 302)
+        link = self.sql('SELECT provider_subject,provider_email FROM oauth_links')[0]
+        self.assertEqual(tuple(link), ('new-google-identity', 'andy@example.test'))
+        self.assertIn(b'andy@example.test', client.get('/dashboard').data)
+        self.assertEqual(client.post('/oauth/google/replace').status_code, 400)
+
+    def test_google_replacement_cannot_take_another_users_identity(self):
+        os.environ['GOOGLE_CLIENT_ID'] = 'fake-client-for-tests'
+        os.environ['GOOGLE_CLIENT_SECRET'] = 'fake-secret-for-tests'
+        self.app = create_app(dict(self.app.config))
+        _, email, secret = self.add_user('admin')
+        other_id, _, _ = self.add_user('sales')
+        self.sql('INSERT INTO oauth_links(user_id,provider,provider_subject) VALUES (?, ?, ?)',
+                 (other_id, 'google', 'other-google-identity'))
+        client, _, _ = self.login(email, secret)
+        with client.session_transaction() as state:
+            state['oauth_mode_fake-state'] = 'replace'
+        identity = {'userinfo': {'sub': 'other-google-identity', 'email': 'other@example.test', 'email_verified': True}}
+        with patch('authlib.integrations.flask_client.apps.FlaskOAuth2App.authorize_access_token', return_value=identity):
+            self.assertEqual(client.get('/oauth/google/callback?state=fake-state').status_code, 409)
+        self.assertEqual(self.sql('SELECT user_id FROM oauth_links')[0][0], other_id)
 
 
 if __name__ == '__main__':
