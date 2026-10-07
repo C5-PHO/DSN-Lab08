@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Registro · TechStore{% endblock %}
+{% block content %}
+<section class="auth-card">
+  <p class="eyebrow">Nueva cuenta</p>
+  <h1>Registro</h1>
+  <p>Las cuentas nuevas reciben el perfil de empleado de ventas. Solo un administrador puede cambiar el rol.</p>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Nombre completo <input name="full_name" maxlength="120" required></label>
+    <label>Correo <input type="email" name="email" autocomplete="username" required></label>
+    <label>Tienda asignada
+      <select name="store_id" required>{% for store in stores %}<option value="{{ store.id }}">{{ store.name }}</option>{% endfor %}</select>
+    </label>
+    <label>Contraseña <input type="password" name="password" minlength="8" autocomplete="new-password" required></label>
+    <small>Mínimo 8 caracteres, una mayúscula, un número y un símbolo.</small>
+    <button type="submit">Crear cuenta y configurar MFA</button>
+  </form>
+  <p><a href="{{ url_for('login') }}">Volver al inicio de sesión</a></p>
+</section>
+{% endblock %}

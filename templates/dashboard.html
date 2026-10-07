@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Inventario · TechStore{% endblock %}
+{% block nav %}
+  {% if user.role == 'admin' %}<a href="{{ url_for('users_page') }}">Usuarios</a>{% endif %}
+  <form method="post" action="{{ url_for('logout') }}" class="inline">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button class="link-button" type="submit">Salir</button>
+  </form>
+{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><p class="eyebrow">Inventario centralizado</p><h1>Productos</h1><p>{{ user.full_name }} · {{ user.role }} · tienda {{ user.store_id }}</p></div>
+  <div class="badge">JWT emitido después de MFA</div>
+</div>
+{% if summary %}
+  <section class="stats"><div><strong>{{ summary.items }}</strong><span>Productos visibles en el reporte</span></div><div><strong>{{ summary.units }}</strong><span>Unidades en stock</span></div></section>
+{% endif %}
+{% if user.role in ('admin', 'manager') %}
+<section class="panel">
+  <h2>Crear producto</h2>
+  <form method="post" action="{{ url_for('create_product_form') }}" class="product-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>SKU <input name="sku" required></label>
+    <label>Nombre <input name="name" required></label>
+    <label>Precio en céntimos <input type="number" name="price_cents" min="0" value="1000" required></label>
+    <label>Stock <input type="number" name="stock" min="0" value="0" required></label>
+    <label>Tienda <select name="store_id">{% for store in stores %}{% if user.role == 'admin' or store.id == user.store_id %}<option value="{{ store.id }}">{{ store.name }}</option>{% endif %}{% endfor %}</select></label>
+    <button type="submit">Crear</button>
+  </form>
+</section>
+{% endif %}
+<section class="panel">
+  <h2>Inventario visible</h2>
+  {% if products %}
+  <div class="table-scroll"><table>
+    <thead><tr><th>ID</th><th>SKU</th><th>Producto</th><th>Tienda</th><th>Precio</th><th>Stock</th><th>Acciones permitidas</th></tr></thead>
+    <tbody>{% for p in products %}<tr>
+      <td>{{ p.id }}</td><td>{{ p.sku }}</td><td>{{ p.name }}</td><td>{{ p.store_name }}</td><td>S/ {{ '%.2f'|format(p.price_cents / 100) }}</td><td>{{ p.stock }}</td>
+      <td class="actions">
+        {% if can(user, 'stock', p) %}<form method="post" action="{{ url_for('stock_form', product_id=p.id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="number" name="stock" min="0" value="{{ p.stock }}" aria-label="Nuevo stock" required><button type="submit">Stock</button></form>{% endif %}
+        {% if can(user, 'edit', p) %}<form method="post" action="{{ url_for('edit_form', product_id=p.id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input name="name" value="{{ p.name }}" aria-label="Nombre" required><input type="number" name="price_cents" min="0" value="{{ p.price_cents }}" aria-label="Precio en céntimos" required><button type="submit">Editar</button></form>{% endif %}
+        {% if can(user, 'delete', p) %}<form method="post" action="{{ url_for('delete_form', product_id=p.id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit" class="danger">Eliminar</button></form>{% endif %}
+        {% if not can(user, 'stock', p) and not can(user, 'edit', p) %}<span class="muted">Solo lectura</span>{% endif %}
+      </td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">No hay productos visibles para este perfil.</p>{% endif %}
+</section>
+<section class="panel"><h2>Acceso social y API</h2>
+  <p>Vincula cada proveedor únicamente después de entrar con contraseña y MFA. El acceso social también exigirá TOTP.</p>
+  {% for provider in providers %}<a class="button ghost" href="{{ url_for('oauth_link', provider=provider) }}">Vincular {{ provider|capitalize }}</a>{% endfor %}
+  {% if not providers %}<p class="muted">Google y GitHub esperan sus credenciales OAuth locales.</p>{% endif %}
+  <p class="muted">Para pruebas de API, <code>/api/token</code> entrega un JWT temporal solo a una sesión autenticada.</p>
+</section>
+{% endblock %}

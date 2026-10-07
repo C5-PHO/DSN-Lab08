@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TechStore{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}">TechStore <span>Lab 08</span></a>
+    <nav>{% block nav %}{% endblock %}</nav>
+  </header>
+  <main class="container">
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+      <div class="alert {{ category }}" role="alert">{{ message }}</div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
