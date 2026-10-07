@@ -1,0 +1,3 @@
+{% macro provider_icon(provider) -%}
+  <img class="provider-icon" src="{{ url_for('static', filename='icons/' ~ provider ~ '.svg') }}" alt="" aria-hidden="true" width="20" height="20">
+{%- endmacro %}

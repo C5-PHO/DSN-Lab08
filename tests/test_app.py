@@ -186,6 +186,26 @@ class TechStoreTests(unittest.TestCase):
         self.assertEqual(self.client.get('/oauth/github/start').status_code, 404)
         self.assertEqual(self.client.get('/api/products').status_code, 401)
 
+    def test_social_buttons_render_local_accessible_provider_icons(self):
+        os.environ.update(GOOGLE_CLIENT_ID='test-google', GOOGLE_CLIENT_SECRET='test-secret',
+                          GITHUB_CLIENT_ID='test-github', GITHUB_CLIENT_SECRET='test-secret')
+        self.app = create_app(dict(self.app.config))
+        client = self.app.test_client()
+        login = client.get('/login').get_data(as_text=True)
+        for provider, label in [('google', 'Google'), ('github', 'GitHub')]:
+            self.assertIn(f'/static/icons/{provider}.svg', login)
+            self.assertIn(f'Continuar con {label}', login)
+            with client.get(f'/static/icons/{provider}.svg') as icon:
+                self.assertEqual(icon.status_code, 200)
+                self.assertEqual(icon.mimetype, 'image/svg+xml')
+        self.assertIn('alt="" aria-hidden="true"', login)
+        _, email, secret = self.add_user('admin')
+        client, _, _ = self.login(email, secret)
+        dashboard = client.get('/dashboard').get_data(as_text=True)
+        self.assertIn('Vincular GitHub', dashboard)
+        self.assertIn('/static/icons/google.svg', dashboard)
+        self.assertIn('/static/icons/github.svg', dashboard)
+
     def test_google_replacement_button_starts_account_selection(self):
         from urllib.parse import parse_qs, urlparse
         os.environ['GOOGLE_CLIENT_ID'] = 'fake-client-for-tests'

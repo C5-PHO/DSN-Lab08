@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from '_social.html' import provider_icon %}
 {% block title %}Inventario · TechStore{% endblock %}
 {% block nav %}
   {% if user.role == 'admin' %}<a href="{{ url_for('users_page') }}">Usuarios</a>{% endif %}
@@ -55,11 +56,11 @@
         <form method="post" action="{{ url_for('replace_google') }}">
           <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
           <p class="muted">La cuenta que elijas reemplazará el acceso con Google actual de tu usuario de TechStore.</p>
-          <button type="submit">Cambiar cuenta Google</button>
+          <button type="submit" class="social-button">{{ provider_icon('google') }}Cambiar cuenta Google</button>
         </form>
       {% endif %}
     {% else %}
-      <a class="button ghost" href="{{ url_for('oauth_link', provider=provider) }}">Vincular {{ provider|capitalize }}</a>
+      <a class="button ghost social-button" href="{{ url_for('oauth_link', provider=provider) }}">{{ provider_icon(provider) }}Vincular {{ 'GitHub' if provider == 'github' else 'Google' }}</a>
     {% endif %}
   {% endfor %}
   {% if not providers %}<p class="muted">Google y GitHub esperan sus credenciales OAuth locales.</p>{% endif %}

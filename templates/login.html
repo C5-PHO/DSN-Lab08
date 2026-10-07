@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from '_social.html' import provider_icon %}
 {% block title %}Iniciar sesión · TechStore{% endblock %}
 {% block content %}
 <section class="auth-card">
@@ -15,8 +16,8 @@
   <div class="social">
     <h2>Cuenta vinculada</h2>
     <p>Para usar Google o GitHub, primero vincula esa identidad desde tu perfil tras iniciar sesión con contraseña y MFA.</p>
-    {% if 'google' in providers %}<a class="button ghost" href="{{ url_for('oauth_start', provider='google') }}">Continuar con Google</a>{% endif %}
-    {% if 'github' in providers %}<a class="button ghost" href="{{ url_for('oauth_start', provider='github') }}">Continuar con GitHub</a>{% endif %}
+    {% if 'google' in providers %}<a class="button ghost social-button" href="{{ url_for('oauth_start', provider='google') }}">{{ provider_icon('google') }}Continuar con Google</a>{% endif %}
+    {% if 'github' in providers %}<a class="button ghost social-button" href="{{ url_for('oauth_start', provider='github') }}">{{ provider_icon('github') }}Continuar con GitHub</a>{% endif %}
     {% if not providers %}<p class="muted">Los accesos sociales estarán disponibles al configurar sus credenciales OAuth.</p>{% endif %}
   </div>
 </section>
