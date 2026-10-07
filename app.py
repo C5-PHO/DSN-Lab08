@@ -83,6 +83,8 @@ def create_app(test_config=None):
         columns = {row['name'] for row in db().execute('PRAGMA table_info(oauth_links)')}
         if 'provider_email' not in columns:
             db().execute('ALTER TABLE oauth_links ADD COLUMN provider_email TEXT')
+        if 'provider_username' not in columns:
+            db().execute('ALTER TABLE oauth_links ADD COLUMN provider_username TEXT')
         db().commit()
 
     oauth = OAuth(app)
@@ -373,7 +375,7 @@ def create_app(test_config=None):
             else:
                 summary = db().execute('SELECT COUNT(*) AS items, COALESCE(SUM(stock),0) AS units FROM products').fetchone()
         links = {row['provider']: dict(row) for row in db().execute(
-            'SELECT provider, provider_email FROM oauth_links WHERE user_id=?', (user['id'],))}
+            'SELECT provider, provider_email, provider_username FROM oauth_links WHERE user_id=?', (user['id'],))}
         return render_template('dashboard.html', user=user, products=products, stores=stores(),
                                can=can, summary=summary, providers=providers, links=links)
 
@@ -610,6 +612,7 @@ def create_app(test_config=None):
         if mode not in ('login', 'link', 'replace'):
             abort(400)
         try:
+            provider_username = None
             token = providers[provider].authorize_access_token()
             if provider == 'google':
                 info = token.get('userinfo') or providers[provider].parse_id_token(token)
@@ -618,7 +621,9 @@ def create_app(test_config=None):
             else:
                 response = providers[provider].get('user', token=token)
                 response.raise_for_status()
-                subject = str(response.json()['id'])
+                info = response.json()
+                subject = str(info['id'])
+                provider_username = info['login']
                 provider_email = None
         except Exception:
             app.logger.exception('OAuth callback failed for %s', provider)
@@ -635,10 +640,10 @@ def create_app(test_config=None):
                 flash('Ya tienes otra cuenta vinculada. Usa Cambiar cuenta Google para reemplazarla.', 'error')
                 return redirect(url_for('dashboard'))
             try:
-                db().execute('INSERT INTO oauth_links (user_id,provider,provider_subject,provider_email) VALUES (?,?,?,?) '
+                db().execute('INSERT INTO oauth_links (user_id,provider,provider_subject,provider_email,provider_username) VALUES (?,?,?,?,?) '
                              'ON CONFLICT(user_id,provider) DO UPDATE SET provider_subject=excluded.provider_subject, '
-                             'provider_email=excluded.provider_email',
-                             (user['id'], provider, subject, provider_email))
+                             'provider_email=excluded.provider_email, provider_username=excluded.provider_username',
+                             (user['id'], provider, subject, provider_email, provider_username))
                 db().commit()
             except sqlite3.IntegrityError:
                 db().rollback()
@@ -651,6 +656,10 @@ def create_app(test_config=None):
         user = get_user(existing['user_id'])
         if not user or user['locked_until'] > int(time.time()):
             abort(401)
+        if provider == 'github':
+            db().execute('UPDATE oauth_links SET provider_username=? WHERE provider=? AND provider_subject=?',
+                         (provider_username, provider, subject))
+            db().commit()
         return begin_mfa(user)
 
     @app.post('/oauth/google/replace')

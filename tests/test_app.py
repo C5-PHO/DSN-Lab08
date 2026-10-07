@@ -186,6 +186,29 @@ class TechStoreTests(unittest.TestCase):
         self.assertEqual(self.client.get('/oauth/github/start').status_code, 404)
         self.assertEqual(self.client.get('/api/products').status_code, 401)
 
+    def test_github_username_is_saved_and_refreshed_on_social_login(self):
+        from unittest.mock import Mock
+        os.environ.update(GITHUB_CLIENT_ID='test-github', GITHUB_CLIENT_SECRET='test-secret')
+        self.app = create_app(dict(self.app.config))
+        user_id, email, secret = self.add_user('sales')
+        client, _, _ = self.login(email, secret)
+        profile = Mock()
+        profile.json.return_value = {'id': 123, 'login': 'andy-test'}
+        with patch('authlib.integrations.flask_client.apps.FlaskOAuth2App.authorize_access_token', return_value={}), \
+             patch('authlib.integrations.flask_client.apps.FlaskOAuth2App.get', return_value=profile):
+            with client.session_transaction() as session:
+                session['oauth_mode_link-state'] = 'link'
+            self.assertEqual(client.get('/oauth/github/callback?state=link-state').status_code, 302)
+            self.assertIn(b'@andy-test', client.get('/dashboard').data)
+            self.sql('UPDATE oauth_links SET provider_username=NULL WHERE user_id=?', (user_id,))
+            anonymous = self.app.test_client()
+            with anonymous.session_transaction() as session:
+                session['oauth_mode_login-state'] = 'login'
+            response = anonymous.get('/oauth/github/callback?state=login-state')
+            self.assertTrue(response.location.endswith('/mfa'))
+            self.assertEqual(self.sql('SELECT provider_username FROM oauth_links')[0][0], 'andy-test')
+            self.assertEqual(anonymous.get('/api/token').status_code, 401)
+
     def test_social_buttons_render_local_accessible_provider_icons(self):
         os.environ.update(GOOGLE_CLIENT_ID='test-google', GOOGLE_CLIENT_SECRET='test-secret',
                           GITHUB_CLIENT_ID='test-github', GITHUB_CLIENT_SECRET='test-secret')

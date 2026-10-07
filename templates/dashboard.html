@@ -51,7 +51,11 @@
   <p>Vincula cada proveedor únicamente después de entrar con contraseña y MFA. El acceso social también exigirá TOTP.</p>
   {% for provider in providers %}
     {% if provider in links %}
-      <p>{{ provider|capitalize }} vinculado: <strong>{{ links[provider].provider_email or 'Correo no registrado en la vinculación anterior' }}</strong></p>
+      {% if provider == 'github' %}
+      <p>GitHub vinculado: <strong>{{ '@' ~ links[provider].provider_username if links[provider].provider_username else 'Cuenta vinculada; inicia sesión con GitHub para actualizar el nombre' }}</strong></p>
+      {% else %}
+      <p>Google vinculado: <strong>{{ links[provider].provider_email or 'Correo no registrado en la vinculación anterior' }}</strong></p>
+      {% endif %}
       {% if provider == 'google' %}
         <form method="post" action="{{ url_for('replace_google') }}">
           <input type="hidden" name="_csrf" value="{{ csrf_token() }}">

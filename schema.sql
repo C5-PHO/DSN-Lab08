@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS oauth_links (
   provider TEXT NOT NULL CHECK (provider IN ('google', 'github')),
   provider_subject TEXT NOT NULL,
   provider_email TEXT,
+  provider_username TEXT,
   UNIQUE (provider, provider_subject),
   UNIQUE (user_id, provider)
 );
